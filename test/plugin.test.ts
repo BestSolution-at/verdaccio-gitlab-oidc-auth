@@ -249,6 +249,26 @@ describe("GitLabOidcAuth", () => {
       expect(result.err).toBeNull();
       expect(result.groups).toBe(false);
     });
+
+    it("returns false for a token signed with an unknown key", async () => {
+      // Generate a different RSA key pair not registered in the JWKS server
+      const unknownKp = await generateKeyPair("RS256");
+      const token = await new SignJWT(
+        FEATURE_BRANCH_PUSH.claims as unknown as Record<string, unknown>,
+      )
+        .setProtectedHeader({ alg: "RS256", kid: "unknown-key-99" })
+        .setIssuedAt()
+        .setIssuer(gitlabUrl)
+        .setAudience(AUDIENCE)
+        .setExpirationTime("5m")
+        .sign(unknownKp.privateKey as CryptoKey);
+
+      const plugin = createPlugin();
+      const result = await authenticate(plugin, "gitlab-oidc", token);
+
+      expect(result.err).toBeNull();
+      expect(result.groups).toBe(false);
+    });
   });
 
   describe("adduser", () => {
