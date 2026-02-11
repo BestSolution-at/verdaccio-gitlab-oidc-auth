@@ -1,6 +1,6 @@
 {
   "name": "verdaccio-gitlab-oidc-auth",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Verdaccio auth plugin for GitLab CI OIDC ID tokens",
   "keywords": [
     "verdaccio",
@@ -17,13 +17,14 @@
     "url": "https://github.com/BestSolution-at/verdaccio-gitlab-oidc-auth"
   },
   "license": "GPL-3.0-only",
-  "author": "BestSolution.at",
+  "author": "udo.rader@bestsolution.at",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist"
   ],
   "scripts": {
+    "prepublishOnly": "npm run build",
     "build": "tsc -p tsconfig.build.json",
     "clean": "rm -rf dist",
     "test": "vitest run",
