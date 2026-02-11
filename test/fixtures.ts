@@ -35,11 +35,11 @@ export interface TestVector {
 export const PROTECTED_BRANCH_PUSH: TestVector = {
   name: "protected branch push",
   claims: {
-    sub: "project_42:ref_type:branch:ref:main",
+    sub: "project_path:my-group/my-project:ref_type:branch:ref:main",
     ref: "main",
     ref_type: "branch",
     ref_protected: "true",
-    project_id: 42,
+    project_id: "42",
     project_path: "my-group/my-project",
     namespace_path: "my-group",
     user_login: "ci-bot",
@@ -60,11 +60,11 @@ export const PROTECTED_BRANCH_PUSH: TestVector = {
 export const FEATURE_BRANCH_PUSH: TestVector = {
   name: "feature branch push",
   claims: {
-    sub: "project_42:ref_type:branch:ref:feature/foo",
+    sub: "project_path:my-group/my-project:ref_type:branch:ref:feature/foo",
     ref: "feature/foo",
     ref_type: "branch",
     ref_protected: "false",
-    project_id: 42,
+    project_id: "42",
     project_path: "my-group/my-project",
     namespace_path: "my-group",
     user_login: "developer",
@@ -84,11 +84,11 @@ export const FEATURE_BRANCH_PUSH: TestVector = {
 export const PROTECTED_TAG: TestVector = {
   name: "protected tag",
   claims: {
-    sub: "project_42:ref_type:tag:ref:v1.0.0",
+    sub: "project_path:my-group/my-project:ref_type:tag:ref:v1.0.0",
     ref: "v1.0.0",
     ref_type: "tag",
     ref_protected: "true",
-    project_id: 42,
+    project_id: "42",
     project_path: "my-group/my-project",
     namespace_path: "my-group",
     user_login: "release-bot",
@@ -109,11 +109,11 @@ export const PROTECTED_TAG: TestVector = {
 export const MERGE_REQUEST_PIPELINE: TestVector = {
   name: "merge request pipeline",
   claims: {
-    sub: "project_42:ref_type:branch:ref:feature/bar",
+    sub: "project_path:my-group/my-project:ref_type:branch:ref:feature/bar",
     ref: "feature/bar",
     ref_type: "branch",
     ref_protected: "false",
-    project_id: 42,
+    project_id: "42",
     project_path: "my-group/my-project",
     namespace_path: "my-group",
     user_login: "developer",
@@ -133,11 +133,11 @@ export const MERGE_REQUEST_PIPELINE: TestVector = {
 export const NESTED_SUBGROUP: TestVector = {
   name: "nested subgroup project",
   claims: {
-    sub: "project_99:ref_type:branch:ref:main",
+    sub: "project_path:my-org/team-a/libs/core:ref_type:branch:ref:main",
     ref: "main",
     ref_type: "branch",
     ref_protected: "true",
-    project_id: 99,
+    project_id: "99",
     project_path: "my-org/team-a/libs/core",
     namespace_path: "my-org/team-a/libs",
     user_login: "ci-bot",

@@ -30,7 +30,7 @@ export interface GitLabJwtClaims {
   ref: string;
   ref_type: string;
   ref_protected: string; // "true" or "false" (string in JWT)
-  project_id: number;
+  project_id: string;
   project_path: string;
   namespace_path: string;
   user_login: string;
