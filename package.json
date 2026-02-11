@@ -32,12 +32,12 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@verdaccio/core": "^8.0.0-next-8.28",
     "jose": "^6.1.3"
   },
   "devDependencies": {
     "@types/jsonwebtoken": "^9.0.10",
     "@verdaccio/config": "^8.0.0-next-8.28",
+    "@verdaccio/core": "^8.0.0-next-8.28",
     "@verdaccio/types": "^13.0.0-next-8.10",
     "typescript": "^5.9.3",
     "vitest": "^4.0.17"
