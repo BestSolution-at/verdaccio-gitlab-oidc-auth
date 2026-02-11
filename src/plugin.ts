@@ -1,5 +1,6 @@
 import { pluginUtils } from "@verdaccio/core";
 import { Logger } from "@verdaccio/types";
+import { jwtVerify, createRemoteJWKSet } from "jose";
 
 import {
   PluginConfig,
@@ -18,6 +19,7 @@ export default class GitLabOidcAuth
   private readonly ciUsername: string;
   private readonly jwksCacheTtl: number;
   private readonly projectGroups: boolean;
+  private jwks?: ReturnType<typeof createRemoteJWKSet>;
 
   public constructor(config: PluginConfig, options: pluginUtils.PluginOptions) {
     super(config, options);
@@ -76,15 +78,26 @@ export default class GitLabOidcAuth
   /**
    * Verify the JWT and return Verdaccio groups on success.
    */
-  private async verifyAndAuthenticate(
-    _token: string,
-  ): Promise<string[]> {
-    // TODO: Implement JWT verification using jose library
-    // 1. Fetch JWKS from this.gitlabUrl + "/oauth/discovery/keys" (cached)
-    // 2. Verify JWT signature (RS256)
-    // 3. Validate claims (iss, aud, exp)
-    // 4. Extract ref_protected and derive groups
-    throw new Error("JWT verification not yet implemented");
+  private async verifyAndAuthenticate(token: string): Promise<string[]> {
+    if (!this.jwks) {
+      this.jwks = createRemoteJWKSet(
+        new URL(`${this.gitlabUrl}/oauth/discovery/keys`),
+        { cacheMaxAge: this.jwksCacheTtl * 1000 },
+      );
+    }
+
+    const { payload } = await jwtVerify<GitLabJwtClaims>(token, this.jwks, {
+      algorithms: ["RS256"],
+      issuer: this.gitlabUrl,
+      audience: this.audience,
+    });
+
+    this.logger.info(
+      { project: payload.project_path, ref: payload.ref, job: payload.job_id },
+      "gitlab-oidc-auth: verified token for @{project} ref=@{ref} job=@{job}",
+    );
+
+    return this.deriveGroups(payload);
   }
 
   /**
