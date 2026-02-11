@@ -21,15 +21,67 @@ fine-grained package access control without long-lived credentials.
 
 ## Groups
 
-Every valid JWT grants the `gitlab-ci` group. Additional groups are derived
-from JWT claims:
+Every valid JWT receives the base group `gitlab-ci`. Additional groups depend
+on branch protection status and the `project_groups` configuration option.
+
+### Base Groups (always assigned)
 
 | Condition | Group |
 |-----------|-------|
-| Always | `gitlab-ci` |
-| `ref_protected` is `"true"` | `gitlab-ci-protected` |
-| `project_groups` enabled | `gitlab:<namespace_path>` |
-| `project_groups` enabled | `gitlab:<project_path>` |
+| Every valid JWT | `gitlab-ci` |
+| JWT with `ref_protected: "true"` | `gitlab-ci-protected` |
+
+### Project Groups (when `project_groups: true`)
+
+When `project_groups` is enabled, the plugin derives additional groups from
+the `namespace_path` and `project_path` JWT claims. These groups include
+composite variants that combine project identity with branch protection status.
+
+| Condition | Group |
+|-----------|-------|
+| Every valid JWT | `gitlab-ci:<namespace_path>` |
+| Every valid JWT | `gitlab-ci:<project_path>` |
+| JWT with `ref_protected: "true"` | `gitlab-ci-protected:<namespace_path>` |
+| JWT with `ref_protected: "true"` | `gitlab-ci-protected:<project_path>` |
+
+### Examples
+
+**Protected branch push** from project `my-group/my-project` on `main`
+(with `project_groups: true`):
+
+```text
+gitlab-ci
+gitlab-ci-protected
+gitlab-ci:my-group
+gitlab-ci-protected:my-group
+gitlab-ci:my-group/my-project
+gitlab-ci-protected:my-group/my-project
+```
+
+**Feature branch push** from the same project on `feature/foo`
+(with `project_groups: true`):
+
+```text
+gitlab-ci
+gitlab-ci:my-group
+gitlab-ci:my-group/my-project
+```
+
+Note: feature branches are not protected, so no `gitlab-ci-protected` groups
+are assigned. This distinction is critical for controlling who can publish
+packages (see [Authorization](#authorization) below).
+
+**Nested subgroup project** `my-org/team-a/libs/core` on protected branch `main`
+(with `project_groups: true`):
+
+```text
+gitlab-ci
+gitlab-ci-protected
+gitlab-ci:my-org/team-a/libs
+gitlab-ci-protected:my-org/team-a/libs
+gitlab-ci:my-org/team-a/libs/core
+gitlab-ci-protected:my-org/team-a/libs/core
+```
 
 ## Installation
 
@@ -53,30 +105,125 @@ auth:
     file: ./htpasswd
 ```
 
+The plugin **must** appear before `htpasswd` in the `auth:` section so that
+CI tokens are verified first. Non-CI usernames fall through to htpasswd.
+
 ### Options
 
 | Option | Required | Default | Description |
 |--------|----------|---------|-------------|
-| `gitlab_url` | yes | — | GitLab instance URL (e.g. `https://gitlab.example.com`) |
-| `audience` | yes | — | Expected `aud` claim in the JWT (must match `aud` in GitLab `id_tokens`) |
+| `gitlab_url` | yes | -- | GitLab instance URL (e.g. `https://gitlab.example.com`) |
+| `audience` | yes | -- | Expected `aud` claim in the JWT (must match `aud` in GitLab `id_tokens`) |
 | `ci_username` | no | `gitlab-oidc` | Username that triggers OIDC authentication |
 | `jwks_cache_ttl` | no | `86400` | How long to cache the JWKS keys (seconds) |
-| `project_groups` | no | `false` | Add `gitlab:<namespace>` and `gitlab:<project>` groups |
+| `project_groups` | no | `false` | Derive project-level and namespace-level groups from JWT claims (see [Project Groups](#project-groups-when-project_groups-true)) |
 
-### Package Access Example
+## Authorization
+
+The plugin itself does **not** implement authorization. It returns groups, and
+Verdaccio's built-in `packages:` configuration controls which groups can
+access or publish to which scopes.
+
+### Understanding Verdaccio's Group Matching
+
+Verdaccio's `publish:` (and `access:`) fields accept a space-separated list of
+groups. A user is authorized if they belong to **any** of the listed groups
+(OR logic). There is no AND logic.
+
+For example:
+
+```yaml
+publish: gitlab-ci-protected tom
+```
+
+This means: allow publishing if the user has the `gitlab-ci-protected` group
+**OR** is the user `tom`. This is important to understand when designing your
+access control rules.
+
+### Package Access Examples
+
+#### Simple: Any Protected CI Build Can Publish
 
 ```yaml
 packages:
-  "@private/*":
-    access: gitlab-ci-protected
-    publish: gitlab-ci-protected
-
-  "**":
+  "@my-scope/*":
     access: $authenticated
-    publish: $authenticated
+    publish: gitlab-ci-protected deploy-admin
 ```
 
+Any CI job running on a protected branch (from any GitLab project) can publish
+to `@my-scope/*`. This is simple but does not isolate projects from each other.
+
+#### Project-Level Isolation
+
+With `project_groups: true`, you can restrict publishing to specific projects:
+
+```yaml
+packages:
+  "@my-scope/*":
+    access: $authenticated
+    publish: gitlab-ci-protected:my-group/my-project deploy-admin
+```
+
+Only protected-branch CI jobs from `my-group/my-project` can publish to
+`@my-scope/*`. A protected-branch build from `other-group/other-project` cannot
+publish here, even though it also has `gitlab-ci-protected`.
+
+#### Namespace-Level Isolation
+
+Restrict publishing to any project within a GitLab group:
+
+```yaml
+packages:
+  "@my-scope/*":
+    access: $authenticated
+    publish: gitlab-ci-protected:my-group deploy-admin
+```
+
+Any project under the `my-group` namespace (on a protected branch) can publish.
+
+#### Multiple Scopes With Different Policies
+
+```yaml
+packages:
+  "@internal/*":
+    access: $authenticated
+    publish: gitlab-ci-protected:my-org/team-a/libs deploy-admin
+
+  "@shared/*":
+    access: $authenticated
+    publish: gitlab-ci-protected:my-org deploy-admin
+
+  "**":
+    access: $all
+    publish: deploy-admin
+    proxy: npmjs
+```
+
+### Security Considerations
+
+- **Branch protection matters**: Only branches and tags marked as "protected"
+  in GitLab produce the `gitlab-ci-protected` groups. Without `project_groups`,
+  any project with a protected branch can publish to scopes that require
+  `gitlab-ci-protected`. Enable `project_groups: true` and use composite groups
+  (e.g. `gitlab-ci-protected:my-group/my-project`) to restrict publishing to
+  specific projects.
+
+- **No long-lived credentials**: OIDC tokens are short-lived JWTs (typically
+  5 minutes). They cannot be reused after expiry and do not need to be rotated
+  or revoked manually.
+
+- **Cryptographic verification only**: The plugin verifies JWT signatures
+  against the GitLab JWKS endpoint. It does not make API calls to GitLab and
+  does not require network access beyond the JWKS endpoint.
+
+- **JWKS caching**: Public keys are cached in memory. The cache is refreshed
+  when an unknown `kid` is encountered (key rotation) or after the configured
+  TTL expires.
+
 ## GitLab CI Usage
+
+### Using Bearer Token (recommended)
 
 ```yaml
 publish:
@@ -89,9 +236,9 @@ publish:
     - npm publish
 ```
 
-> **Note**: The `id_tokens` keyword requires GitLab 15.7 or later.
+### Using HTTP Basic Auth
 
-For HTTP Basic Auth (e.g. with `npm adduser` or `.npmrc` `_auth`):
+For registries that require Basic Auth (e.g. when using `_auth` in `.npmrc`):
 
 ```yaml
 publish:
@@ -104,6 +251,8 @@ publish:
     - echo "//${VERDACCIO_HOST}/:_auth=${AUTH}" > .npmrc
     - npm publish
 ```
+
+> **Note**: The `id_tokens` keyword requires GitLab 15.7 or later.
 
 ## Development
 

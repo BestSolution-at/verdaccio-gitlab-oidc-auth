@@ -104,18 +104,25 @@ export default class GitLabOidcAuth
    * Derive Verdaccio groups from verified JWT claims.
    */
   private deriveGroups(claims: GitLabJwtClaims): string[] {
+    const isProtected = claims.ref_protected === "true";
     const groups: string[] = ["gitlab-ci"];
 
-    if (claims.ref_protected === "true") {
+    if (isProtected) {
       groups.push("gitlab-ci-protected");
     }
 
     if (this.projectGroups) {
       if (claims.namespace_path) {
-        groups.push(`gitlab:${claims.namespace_path}`);
+        groups.push(`gitlab-ci:${claims.namespace_path}`);
+        if (isProtected) {
+          groups.push(`gitlab-ci-protected:${claims.namespace_path}`);
+        }
       }
       if (claims.project_path) {
-        groups.push(`gitlab:${claims.project_path}`);
+        groups.push(`gitlab-ci:${claims.project_path}`);
+        if (isProtected) {
+          groups.push(`gitlab-ci-protected:${claims.project_path}`);
+        }
       }
     }
 

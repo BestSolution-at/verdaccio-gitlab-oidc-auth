@@ -51,8 +51,10 @@ export const PROTECTED_BRANCH_PUSH: TestVector = {
   expectedGroupsWithProjects: [
     "gitlab-ci",
     "gitlab-ci-protected",
-    "gitlab:my-group",
-    "gitlab:my-group/my-project",
+    "gitlab-ci:my-group",
+    "gitlab-ci-protected:my-group",
+    "gitlab-ci:my-group/my-project",
+    "gitlab-ci-protected:my-group/my-project",
   ],
 };
 
@@ -75,8 +77,8 @@ export const FEATURE_BRANCH_PUSH: TestVector = {
   expectedGroups: ["gitlab-ci"],
   expectedGroupsWithProjects: [
     "gitlab-ci",
-    "gitlab:my-group",
-    "gitlab:my-group/my-project",
+    "gitlab-ci:my-group",
+    "gitlab-ci:my-group/my-project",
   ],
 };
 
@@ -100,8 +102,10 @@ export const PROTECTED_TAG: TestVector = {
   expectedGroupsWithProjects: [
     "gitlab-ci",
     "gitlab-ci-protected",
-    "gitlab:my-group",
-    "gitlab:my-group/my-project",
+    "gitlab-ci:my-group",
+    "gitlab-ci-protected:my-group",
+    "gitlab-ci:my-group/my-project",
+    "gitlab-ci-protected:my-group/my-project",
   ],
 };
 
@@ -124,8 +128,8 @@ export const MERGE_REQUEST_PIPELINE: TestVector = {
   expectedGroups: ["gitlab-ci"],
   expectedGroupsWithProjects: [
     "gitlab-ci",
-    "gitlab:my-group",
-    "gitlab:my-group/my-project",
+    "gitlab-ci:my-group",
+    "gitlab-ci:my-group/my-project",
   ],
 };
 
@@ -149,8 +153,10 @@ export const NESTED_SUBGROUP: TestVector = {
   expectedGroupsWithProjects: [
     "gitlab-ci",
     "gitlab-ci-protected",
-    "gitlab:my-org/team-a/libs",
-    "gitlab:my-org/team-a/libs/core",
+    "gitlab-ci:my-org/team-a/libs",
+    "gitlab-ci-protected:my-org/team-a/libs",
+    "gitlab-ci:my-org/team-a/libs/core",
+    "gitlab-ci-protected:my-org/team-a/libs/core",
   ],
 };
 
