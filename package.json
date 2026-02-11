@@ -1,0 +1,50 @@
+{
+  "name": "verdaccio-gitlab-oidc-auth",
+  "version": "0.1.0",
+  "description": "Verdaccio auth plugin for GitLab CI OIDC ID tokens",
+  "keywords": [
+    "verdaccio",
+    "verdaccio-plugin",
+    "verdaccio-auth",
+    "gitlab",
+    "oidc",
+    "ci",
+    "authentication"
+  ],
+  "homepage": "https://github.com/BestSolution-at/verdaccio-gitlab-oidc-auth",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BestSolution-at/verdaccio-gitlab-oidc-auth"
+  },
+  "license": "GPL-3.0-only",
+  "author": "BestSolution.at",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "clean": "rm -rf dist",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@verdaccio/core": "^8.0.0-next-8.28",
+    "jose": "^6.1.3"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.10",
+    "@verdaccio/config": "^8.0.0-next-8.28",
+    "@verdaccio/types": "^13.0.0-next-8.10",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.17"
+  },
+  "peerDependencies": {
+    "verdaccio": ">=6"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
