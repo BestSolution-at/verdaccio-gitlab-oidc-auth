@@ -3,7 +3,12 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { generateKeyPair, SignJWT, exportJWK } from "jose";
 import type { JWK } from "jose";
 import GitLabOidcAuth from "../src/plugin";
-import type { GitLabJwtClaims } from "../src/types";
+import {
+  ALL_VECTORS,
+  PROTECTED_BRANCH_PUSH,
+  FEATURE_BRANCH_PUSH,
+  type ClaimFixture,
+} from "./fixtures";
 
 // ---------------------------------------------------------------------------
 // Test infrastructure: in-memory JWKS server + JWT builder
@@ -20,7 +25,6 @@ let gitlabUrl: string;
 const AUDIENCE = "https://npm.example.com";
 
 beforeAll(async () => {
-  // Generate an RSA key pair for signing test JWTs
   const kp = await generateKeyPair("RS256");
   privateKey = kp.privateKey as CryptoKey;
   publicJwk = await exportJWK(kp.publicKey as CryptoKey);
@@ -28,7 +32,6 @@ beforeAll(async () => {
   publicJwk.use = "sig";
   publicJwk.alg = "RS256";
 
-  // Start a minimal HTTP server that serves JWKS at /oauth/discovery/keys
   jwksServer = http.createServer((req, res) => {
     if (req.url === "/oauth/discovery/keys") {
       res.writeHead(200, { "Content-Type": "application/json" });
@@ -55,40 +58,24 @@ afterAll(async () => {
   await new Promise<void>((resolve) => jwksServer.close(() => resolve()));
 });
 
-/** Build a signed JWT with the given claims (merged over sensible defaults). */
+/** Build a signed JWT from a claim fixture (iss/aud/exp/iat set automatically). */
 async function buildJwt(
-  overrides: Partial<GitLabJwtClaims> = {},
-  opts?: { expiresIn?: string; notBefore?: string },
+  fixture: ClaimFixture,
+  opts?: {
+    iss?: string;
+    aud?: string;
+    expiresIn?: string;
+  },
 ): Promise<string> {
-  const claims: GitLabJwtClaims = {
-    iss: gitlabUrl,
-    aud: AUDIENCE,
-    exp: 0, // set by jose
-    iat: 0, // set by jose
-    sub: "project_123:ref_type:branch:ref:main",
-    ref: "main",
-    ref_type: "branch",
-    ref_protected: "true",
-    project_id: 123,
-    project_path: "my-group/my-project",
-    namespace_path: "my-group",
-    user_login: "ci-bot",
-    pipeline_source: "push",
-    job_id: "98765",
-    ...overrides,
-  };
+  const iss = opts?.iss ?? gitlabUrl;
+  const aud = opts?.aud ?? AUDIENCE;
 
-  let builder = new SignJWT(claims as unknown as Record<string, unknown>)
+  let builder = new SignJWT(fixture as unknown as Record<string, unknown>)
     .setProtectedHeader({ alg: "RS256", kid: "test-key-1" })
     .setIssuedAt()
-    .setIssuer(claims.iss)
-    .setAudience(claims.aud);
-
-  if (opts?.expiresIn) {
-    builder = builder.setExpirationTime(opts.expiresIn);
-  } else {
-    builder = builder.setExpirationTime("5m");
-  }
+    .setIssuer(iss)
+    .setAudience(aud)
+    .setExpirationTime(opts?.expiresIn ?? "5m");
 
   return builder.sign(privateKey);
 }
@@ -148,7 +135,6 @@ describe("GitLabOidcAuth", () => {
     });
 
     it("strips trailing slashes from gitlab_url", () => {
-      // Should not throw — verifies URL normalization doesn't break
       const plugin = createPlugin({ gitlab_url: gitlabUrl + "///" });
       expect(plugin).toBeDefined();
     });
@@ -170,65 +156,56 @@ describe("GitLabOidcAuth", () => {
     });
   });
 
-  describe("authenticate — valid JWT", () => {
-    it("returns groups for a valid token from a protected ref", async () => {
-      const plugin = createPlugin();
-      const token = await buildJwt({ ref_protected: "true" });
-      const result = await authenticate(plugin, "gitlab-oidc", token);
+  describe("authenticate — test vectors (project_groups disabled)", () => {
+    for (const vector of ALL_VECTORS) {
+      it(`${vector.name}: returns ${JSON.stringify(vector.expectedGroups)}`, async () => {
+        const plugin = createPlugin();
+        const token = await buildJwt(vector.claims);
+        const result = await authenticate(plugin, "gitlab-oidc", token);
 
-      expect(result.err).toBeNull();
-      expect(result.groups).toEqual(["gitlab-ci", "gitlab-ci-protected"]);
-    });
+        expect(result.err).toBeNull();
+        expect(result.groups).toEqual(vector.expectedGroups);
+      });
+    }
+  });
 
-    it("returns only gitlab-ci for an unprotected ref", async () => {
-      const plugin = createPlugin();
-      const token = await buildJwt({ ref_protected: "false" });
-      const result = await authenticate(plugin, "gitlab-oidc", token);
+  describe("authenticate — test vectors (project_groups enabled)", () => {
+    for (const vector of ALL_VECTORS) {
+      it(`${vector.name}: returns ${JSON.stringify(vector.expectedGroupsWithProjects)}`, async () => {
+        const plugin = createPlugin({ project_groups: true });
+        const token = await buildJwt(vector.claims);
+        const result = await authenticate(plugin, "gitlab-oidc", token);
 
-      expect(result.err).toBeNull();
-      expect(result.groups).toEqual(["gitlab-ci"]);
-    });
+        expect(result.err).toBeNull();
+        expect(result.groups).toEqual(vector.expectedGroupsWithProjects);
+      });
+    }
+  });
 
+  describe("authenticate — custom ci_username", () => {
     it("respects custom ci_username", async () => {
       const plugin = createPlugin({ ci_username: "my-ci-bot" });
-      const token = await buildJwt();
+      const token = await buildJwt(PROTECTED_BRANCH_PUSH.claims);
       const result = await authenticate(plugin, "my-ci-bot", token);
 
       expect(result.err).toBeNull();
       expect(result.groups).toContain("gitlab-ci");
     });
 
-    it("adds project groups when project_groups is enabled", async () => {
-      const plugin = createPlugin({ project_groups: true });
-      const token = await buildJwt({
-        namespace_path: "my-group",
-        project_path: "my-group/my-project",
-      });
+    it("rejects default username when custom ci_username is set", async () => {
+      const plugin = createPlugin({ ci_username: "my-ci-bot" });
+      const token = await buildJwt(PROTECTED_BRANCH_PUSH.claims);
       const result = await authenticate(plugin, "gitlab-oidc", token);
 
       expect(result.err).toBeNull();
-      expect(result.groups).toContain("gitlab-ci");
-      expect(result.groups).toContain("gitlab:my-group");
-      expect(result.groups).toContain("gitlab:my-group/my-project");
-    });
-
-    it("omits project groups when project_groups is disabled (default)", async () => {
-      const plugin = createPlugin();
-      const token = await buildJwt({
-        namespace_path: "my-group",
-        project_path: "my-group/my-project",
-      });
-      const result = await authenticate(plugin, "gitlab-oidc", token);
-
-      expect(result.err).toBeNull();
-      expect(result.groups).toEqual(["gitlab-ci", "gitlab-ci-protected"]);
+      expect(result.groups).toBe(false);
     });
   });
 
   describe("authenticate — invalid JWT", () => {
     it("returns false for an expired token", async () => {
       const plugin = createPlugin();
-      const token = await buildJwt({}, { expiresIn: "-1s" });
+      const token = await buildJwt(FEATURE_BRANCH_PUSH.claims, { expiresIn: "-1s" });
       const result = await authenticate(plugin, "gitlab-oidc", token);
 
       expect(result.err).toBeNull();
@@ -237,7 +214,9 @@ describe("GitLabOidcAuth", () => {
 
     it("returns false for wrong audience", async () => {
       const plugin = createPlugin();
-      const token = await buildJwt({ aud: "https://wrong.example.com" } as any);
+      const token = await buildJwt(FEATURE_BRANCH_PUSH.claims, {
+        aud: "https://wrong.example.com",
+      });
       const result = await authenticate(plugin, "gitlab-oidc", token);
 
       expect(result.err).toBeNull();
@@ -246,7 +225,9 @@ describe("GitLabOidcAuth", () => {
 
     it("returns false for wrong issuer", async () => {
       const plugin = createPlugin();
-      const token = await buildJwt({ iss: "https://evil.example.com" } as any);
+      const token = await buildJwt(FEATURE_BRANCH_PUSH.claims, {
+        iss: "https://evil.example.com",
+      });
       const result = await authenticate(plugin, "gitlab-oidc", token);
 
       expect(result.err).toBeNull();
