@@ -1,4 +1,4 @@
-# verdaccio-gitlab-oidc-auth
+# @bestsolution/verdaccio-gitlab-oidc-auth
 
 A [Verdaccio](https://verdaccio.org/) auth plugin that authenticates GitLab CI
 jobs using [OIDC ID tokens](https://docs.gitlab.com/ci/secrets/id_token_authentication/).
@@ -22,7 +22,7 @@ fine-grained package access control without long-lived credentials.
 ## Groups
 
 Every valid JWT receives the base group `gitlab-ci`. Additional groups depend
-on branch protection status and the `project_groups` configuration option.
+on branch/tag protection status and the `project_groups` configuration option.
 
 ### Base Groups (always assigned)
 
@@ -35,7 +35,8 @@ on branch protection status and the `project_groups` configuration option.
 
 When `project_groups` is enabled, the plugin derives additional groups from
 the `namespace_path` and `project_path` JWT claims. These groups include
-composite variants that combine project identity with branch protection status.
+composite variants that combine project identity with branch/tag protection
+status.
 
 | Condition | Group |
 |-----------|-------|
@@ -46,7 +47,7 @@ composite variants that combine project identity with branch protection status.
 
 ### Examples
 
-**Protected branch push** from project `my-group/my-project` on `main`
+**Protected branch/tag push** from project `my-group/my-project` on `main`
 (with `project_groups: true`):
 
 ```text
@@ -58,7 +59,7 @@ gitlab-ci:my-group/my-project
 gitlab-ci-protected:my-group/my-project
 ```
 
-**Feature branch push** from the same project on `feature/foo`
+**Feature branch/tag push** from the same project on `feature/foo`
 (with `project_groups: true`):
 
 ```text
@@ -67,7 +68,7 @@ gitlab-ci:my-group
 gitlab-ci:my-group/my-project
 ```
 
-Note: feature branches are not protected, so no `gitlab-ci-protected` groups
+Note: feature branches/tags are not protected, so no `gitlab-ci-protected` groups
 are assigned. This distinction is critical for controlling who can publish
 packages (see [Authorization](#authorization) below).
 
@@ -86,7 +87,7 @@ gitlab-ci-protected:my-org/team-a/libs/core
 ## Installation
 
 ```bash
-npm install verdaccio-gitlab-oidc-auth
+npm install @bestsolution/verdaccio-gitlab-oidc-auth
 ```
 
 ## Configuration
@@ -95,7 +96,7 @@ In your Verdaccio `config.yaml`:
 
 ```yaml
 auth:
-  gitlab-oidc-auth:
+  "@bestsolution/verdaccio-gitlab-oidc-auth":
     gitlab_url: https://gitlab.example.com
     audience: https://npm.example.com
     # ci_username: gitlab-oidc          # optional, default: "gitlab-oidc"
@@ -151,8 +152,9 @@ packages:
     publish: gitlab-ci-protected deploy-admin
 ```
 
-Any CI job running on a protected branch (from any GitLab project) can publish
-to `@my-scope/*`. This is simple but does not isolate projects from each other.
+Any CI job running on a protected branch or protected tag (from any GitLab project)
+can publish to `@my-scope/*`. This is simple but does not isolate projects from
+each other.
 
 #### Project-Level Isolation
 
@@ -165,9 +167,9 @@ packages:
     publish: gitlab-ci-protected:my-group/my-project deploy-admin
 ```
 
-Only protected-branch CI jobs from `my-group/my-project` can publish to
-`@my-scope/*`. A protected-branch build from `other-group/other-project` cannot
-publish here, even though it also has `gitlab-ci-protected`.
+Only protected-branch/tag CI jobs from `my-group/my-project` can publish to
+`@my-scope/*`. A protected-branch/tag build from `other-group/other-project`
+cannot publish here, even though it also has `gitlab-ci-protected`.
 
 #### Namespace-Level Isolation
 
@@ -180,7 +182,7 @@ packages:
     publish: gitlab-ci-protected:my-group deploy-admin
 ```
 
-Any project under the `my-group` namespace (on a protected branch) can publish.
+Any project under the `my-group` namespace (on a protected branch/tag) can publish.
 
 #### Multiple Scopes With Different Policies
 
@@ -202,9 +204,9 @@ packages:
 
 ### Security Considerations
 
-- **Branch protection matters**: Only branches and tags marked as "protected"
+- **Branch/tag protection matters**: Only branches and tags marked as "protected"
   in GitLab produce the `gitlab-ci-protected` groups. Without `project_groups`,
-  any project with a protected branch can publish to scopes that require
+  any project with a protected branch/tag can publish to scopes that require
   `gitlab-ci-protected`. Enable `project_groups: true` and use composite groups
   (e.g. `gitlab-ci-protected:my-group/my-project`) to restrict publishing to
   specific projects.
