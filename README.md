@@ -225,7 +225,7 @@ packages:
 
 ## GitLab CI Usage
 
-### Using Bearer Token (recommended)
+The plugin only supports (and requires) Basic Auth:
 
 ```yaml
 publish:
@@ -234,22 +234,7 @@ publish:
     VERDACCIO_TOKEN:
       aud: https://npm.example.com
   script:
-    - echo "//${VERDACCIO_HOST}/:_authToken=${VERDACCIO_TOKEN}" > .npmrc
-    - npm publish
-```
-
-### Using HTTP Basic Auth
-
-For registries that require Basic Auth (e.g. when using `_auth` in `.npmrc`):
-
-```yaml
-publish:
-  image: node:22
-  id_tokens:
-    VERDACCIO_TOKEN:
-      aud: https://npm.example.com
-  script:
-    - AUTH=$(echo -n "gitlab-oidc:${VERDACCIO_TOKEN}" | base64)
+    - AUTH=$(echo -n "gitlab-oidc:${VERDACCIO_TOKEN}" | base64 -w0)
     - echo "//${VERDACCIO_HOST}/:_auth=${AUTH}" > .npmrc
     - npm publish
 ```
