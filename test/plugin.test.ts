@@ -223,6 +223,26 @@ describe("GitLabOidcAuth", () => {
       expect(result.groups).toBe(false);
     });
 
+    it("tolerates trailing slash in JWT audience", async () => {
+      const plugin = createPlugin();
+      const token = await buildJwt(PROTECTED_BRANCH_PUSH.claims, {
+        aud: AUDIENCE + "/",
+      });
+      const result = await authenticate(plugin, "gitlab-oidc", token);
+
+      expect(result.err).toBeNull();
+      expect(result.groups).toContain("gitlab-ci");
+    });
+
+    it("tolerates trailing slash in configured audience", async () => {
+      const plugin = createPlugin({ audience: AUDIENCE + "/" });
+      const token = await buildJwt(PROTECTED_BRANCH_PUSH.claims);
+      const result = await authenticate(plugin, "gitlab-oidc", token);
+
+      expect(result.err).toBeNull();
+      expect(result.groups).toContain("gitlab-ci");
+    });
+
     it("returns false for wrong issuer", async () => {
       const plugin = createPlugin();
       const token = await buildJwt(FEATURE_BRANCH_PUSH.claims, {

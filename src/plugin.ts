@@ -37,7 +37,7 @@ export default class GitLabOidcAuth
     }
 
     this.gitlabUrl = config.gitlab_url.replace(/\/+$/, "");
-    this.audience = config.audience;
+    this.audience = config.audience.replace(/\/+$/, "");
     this.ciUsername = config.ci_username ?? DEFAULT_CI_USERNAME;
     this.jwksCacheTtl = config.jwks_cache_ttl ?? DEFAULT_JWKS_CACHE_TTL;
     this.projectGroups = config.project_groups ?? false;
@@ -89,8 +89,18 @@ export default class GitLabOidcAuth
     const { payload } = await jwtVerify<GitLabJwtClaims>(token, this.jwks, {
       algorithms: ["RS256"],
       issuer: this.gitlabUrl,
-      audience: this.audience,
     });
+
+    // Verify audience manually with trailing-slash normalization.
+    // GitLab CI id_tokens.aud may include a trailing slash (e.g. from a
+    // variable like NPM_REGISTRY=https://host/) while the plugin config
+    // typically omits it.  jose's built-in audience check is exact, so we
+    // normalize both sides here instead.
+    const tokenAud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
+    const normalizedAud = tokenAud.map((a) => a?.replace(/\/+$/, ""));
+    if (!normalizedAud.includes(this.audience)) {
+      throw new Error(`unexpected "aud" claim value`);
+    }
 
     this.logger.info(
       { project: payload.project_path, ref: payload.ref, job: payload.job_id },
